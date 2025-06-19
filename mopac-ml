@@ -92,6 +92,14 @@ def check_input_file(fn):
                     mopac_ml_terminate(
                         "The ML correction is not activated in the input file,\nplease add keyword MLCORR"
                     )
+            elif line: #line is not 1st or empty, check for atoms
+                atom = (line.split()[0])
+                if (atom not in ("H", "Li", "C", "N", "O", "F", "Na", "Mg", "P", "S", "Cl", "K", "Ca", "Br", "I")):
+                    mopac_ml_terminate(
+                        f"The input contains an unknown atom: {atom}"
+                    )
+
+
             ln += 1
 
 def check_system_and_mopac(mopac_exe):
@@ -149,7 +157,9 @@ def wait_for_input(pipe_in="fifo_out.tmp"):
 
     # Check size of coords
     if size != len(coords):
-        raise Exception("No. of coordinates does not match the header")
+        print("ERROR: No. of coordinates does not match the header", file=sys.stderr)
+        clean_interface_pipes()
+        os._exit(1)
 
     # Split lines and convert to numbers
     for i, line in enumerate(coords):
@@ -174,7 +184,6 @@ def write_output(energy, gradient=None, pipe_out="fifo_in.tmp"):
 def calculation():
     z_to_atype = {35: 1, 6: 3, 20: 5, 17: 7, 9: 9, 1: 10, 53: 12, 19: 13, 3: 14, 12: 15, 7: 17, 11: 19, 8: 21, 15: 23, 16: 26}
     while True:
-        skip = []
         elements, coords, do_grad = wait_for_input()
         disp = DispersionModel(
             numbers=np.array(elements), positions=np.array(coords) / BOHR2ANGSTROM
@@ -183,18 +192,8 @@ def calculation():
             RationalDampingParam(s6=1.0, s8=0.3908, a1=0.566, a2=3.128), grad=True
         )
         dftd3_corr = res.get("energy") * HARTREE2KJMOL
-        elem_out = []
-        for index, z in enumerate(elements):
-            if z not in z_to_atype:  # unknown atom skipping
-                skip.append(index)
-                print(f"Skipping unknown atom (atomic number {z}, index {index})", file=sys.stderr)
-            else:
-                elem_out.append(z_to_atype[z])
-        coords = np.delete(coords,skip,axis=0)
-        elements = elem_out
-
         # Energy calculation
-        ene, forces = energy_forces(skip, elements, coords, model)
+        ene, forces = energy_forces(elements, coords, model)
         # ... and gradient
         dftd3_grad = res.get("gradient") * HARTREE2KJMOL /BOHR2ANGSTROM
         if do_grad:
@@ -206,19 +205,14 @@ def calculation():
         write_output(ene + dftd3_corr, grad)
 
 
-def energy_forces(skip, elem, geom, model):
-    if elem == []:  # empty geom - noble gases
-        return (0, [[0, 0, 0]] * len(skip))
+def energy_forces(elem, geom, model):
     types = torch.tensor(elem, dtype=torch.long)
     types = types.to(device)
     pos = torch.tensor(geom, dtype=torch.float32)
     pos = pos.to(device)
     energy, forces = model.forward(types, pos)  # ,batch)
-    forces_corr = forces.tolist()
-    for i in skip:
-        forces_corr.insert(i, [0, 0, 0])
-    forces_corr = np.array(forces_corr)
-    return (energy.item(), forces_corr)
+    forces = forces.detach().numpy()
+    return (energy.item(), forces)
 
 # -------------------------------------------------------------------------------
 # Interrupt handling
