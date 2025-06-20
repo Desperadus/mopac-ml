@@ -185,6 +185,7 @@ def calculation():
     z_to_atype = {35: 1, 6: 3, 20: 5, 17: 7, 9: 9, 1: 10, 53: 12, 19: 13, 3: 14, 12: 15, 7: 17, 11: 19, 8: 21, 15: 23, 16: 26}
     while True:
         elements, coords, do_grad = wait_for_input()
+        a_types = [ z_to_atype[atom] for atom in elements ]
         disp = DispersionModel(
             numbers=np.array(elements), positions=np.array(coords) / BOHR2ANGSTROM
         )
@@ -193,7 +194,7 @@ def calculation():
         )
         dftd3_corr = res.get("energy") * HARTREE2KJMOL
         # Energy calculation
-        ene, forces = energy_forces(elements, coords, model)
+        ene, forces = energy_forces(a_types, coords, model)
         # ... and gradient
         dftd3_grad = res.get("gradient") * HARTREE2KJMOL /BOHR2ANGSTROM
         if do_grad:
