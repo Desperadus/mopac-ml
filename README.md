@@ -8,6 +8,8 @@ MOPAC-ML has been developed for Linux and may not work on other platforms.
 Usage
 -----
 
+**Note:** We have discovered a bug causing Li, Na, K, Mg, and Ca atoms to be ignored in the machine-learning calculation without raising errors. The bug has now been corrected. **All calculations containing these atoms done prior to this commit should be redone.**
+
 MOPAC-ML is used the same way as MOPAC, by running it with the name of the MOPAC input file as the single argument. Assuming that the MOPAC-ML directory is added to the PATH environment variable, it is as simple as:
 
 ````
@@ -17,6 +19,7 @@ mopac_ml mopac_input.in
 The input is a standard MOPAC input file where the method is set to `PM6` and an additional keyword `MLCORR` is added. An example of the input file can be found in the `tests/01-standalone_mopac-ml` directory.
 
 Only one MOPAC-ML calculation can be run in one directory at the same time.
+
 
 Dependencies
 ------------
