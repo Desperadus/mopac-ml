@@ -31,9 +31,15 @@ device = torch.get_default_device()
 # -------------------------------------------------------------------------------
 
 install_path = os.path.dirname(os.path.abspath(__file__))
-model_file = os.path.join(install_path, "models", "PM6-ML_correction_seed8_best.ckpt")
-mopac_exe = os.path.join(install_path, "mopac")
+model_file = os.path.join(install_path, "models",
+                          "PM6-ML_correction_seed8_best.ckpt")
 
+if sys.platform == "linux":
+    mopac_exe = os.path.join(install_path, "mopac")
+elif sys.platform == "darwin":
+    mopac_exe = os.path.join(install_path, "mopac_macos")
+else:
+    raise Exception("Unsupported OS")
 # -------------------------------------------------------------------------------
 # Constants - unit conversion
 # -------------------------------------------------------------------------------
@@ -44,6 +50,7 @@ BOHR2ANGSTROM = 0.529177210903
 # -------------------------------------------------------------------------------
 # Methods - initialization
 # -------------------------------------------------------------------------------
+
 
 def mopac_ml_terminate(msg):
     """
@@ -92,35 +99,35 @@ def check_input_file(fn):
                     mopac_ml_terminate(
                         "The ML correction is not activated in the input file,\nplease add keyword MLCORR"
                     )
-            elif line: #line is not 1st or empty, check for atoms
+            elif line:  # line is not 1st or empty, check for atoms
                 atom = (line.split()[0])
                 if (atom not in ("H", "Li", "C", "N", "O", "F", "Na", "Mg", "P", "S", "Cl", "K", "Ca", "Br", "I")):
                     mopac_ml_terminate(
                         f"The input contains an unknown atom: {atom}"
                     )
 
-
             ln += 1
+
 
 def check_system_and_mopac(mopac_exe):
     """
     Check system, availability of MOPAC, etc
     """
-    # Check if we're on Linux
-    if not sys.platform == "linux":
-        mopac_ml_terminate("MOPAC-ML can currently be used only on Linux")
     if not os.path.exists(mopac_exe):
-        mopac_ml_terminate("MOPAC executable not found in the MOPAC-ML installation directory.\nIt should be named 'mopac'")
+        mopac_ml_terminate(
+            "MOPAC executable not found in the MOPAC-ML installation directory.\nIt should be named 'mopac'")
     if not os.path.isfile(mopac_exe):
         mopac_ml_terminate("MOPAC executable ('mopac') is not a file")
     if not os.access(mopac_exe, os.X_OK):
         mopac_ml_terminate("MOPAC executable ('mopac') is not executable")
+
 
 def create_interface_pipes():
     """
     Create the named pipes used by the interface
     """
     os.system("mkfifo fifo_in.tmp  fifo_out.tmp")
+
 
 def clean_interface_pipes():
     """
@@ -131,6 +138,7 @@ def clean_interface_pipes():
 # -------------------------------------------------------------------------------
 # Methods - interface
 # -------------------------------------------------------------------------------
+
 
 def wait_for_input(pipe_in="fifo_out.tmp"):
     """
@@ -181,11 +189,13 @@ def write_output(energy, gradient=None, pipe_out="fifo_in.tmp"):
             print(g[0], " ", g[1], " ", g[2], file=f_out)
     f_out.close()
 
+
 def calculation():
-    z_to_atype = {35: 1, 6: 3, 20: 5, 17: 7, 9: 9, 1: 10, 53: 12, 19: 13, 3: 14, 12: 15, 7: 17, 11: 19, 8: 21, 15: 23, 16: 26}
+    z_to_atype = {35: 1, 6: 3, 20: 5, 17: 7, 9: 9, 1: 10, 53: 12,
+                  19: 13, 3: 14, 12: 15, 7: 17, 11: 19, 8: 21, 15: 23, 16: 26}
     while True:
         elements, coords, do_grad = wait_for_input()
-        a_types = [ z_to_atype[atom] for atom in elements ]
+        a_types = [z_to_atype[atom] for atom in elements]
         disp = DispersionModel(
             numbers=np.array(elements), positions=np.array(coords) / BOHR2ANGSTROM
         )
@@ -196,7 +206,7 @@ def calculation():
         # Energy calculation
         ene, forces = energy_forces(a_types, coords, model)
         # ... and gradient
-        dftd3_grad = res.get("gradient") * HARTREE2KJMOL /BOHR2ANGSTROM
+        dftd3_grad = res.get("gradient") * HARTREE2KJMOL / BOHR2ANGSTROM
         if do_grad:
             # Multiply with -1 to get gradient from forces
             grad = (forces * -1.0 + dftd3_grad) / 4.184
@@ -221,11 +231,13 @@ def energy_forces(elem, geom, model):
 
 # Remove the pipes on exit using a keyboard interrupt handler
 
+
 def sigint_handler(signal, frame):
     print()
     print("Interrupted, cleaning the files")
     clean_interface_pipes()
     sys.exit(0)
+
 
 signal.signal(signal.SIGINT, sigint_handler)
 
